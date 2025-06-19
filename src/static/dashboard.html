@@ -4,11 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Shorty - 管理仪表板</title>
-    <link
-      rel="stylesheet"
-      href="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.js"
-    />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 移除外部 Lucide Icons CSS 以避免 CSP 问题 -->
     <style>
       * {
         margin: 0;
@@ -71,18 +67,6 @@
         display: grid;
         grid-template-columns: 1fr;
         gap: 2rem;
-      }
-
-      @media (min-width: 768px) {
-        .dashboard-grid {
-          grid-template-columns: 1fr 1fr;
-        }
-      }
-
-      @media (min-width: 1024px) {
-        .dashboard-grid {
-          grid-template-columns: 2fr 1fr;
-        }
       }
 
       /* 卡片样式 */
@@ -353,13 +337,6 @@
         }
       }
 
-      /* 图表容器 */
-      .chart-container {
-        position: relative;
-        height: 300px;
-        margin: 1rem 0;
-      }
-
       /* 工具提示 */
       .tooltip {
         position: relative;
@@ -463,7 +440,7 @@
 
         <!-- 仪表板网格 -->
         <div class="dashboard-grid">
-          <!-- 左侧：链接管理 -->
+          <!-- 链接管理 -->
           <div class="card">
             <div class="card-header">
               <h2 class="card-title">📋 链接管理</h2>
@@ -475,18 +452,6 @@
                   <div class="empty-state-icon">📦</div>
                   <p>正在加载链接数据...</p>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 右侧：分析统计 -->
-          <div class="card">
-            <div class="card-header">
-              <h2 class="card-title">📊 访问统计</h2>
-            </div>
-            <div class="card-content">
-              <div class="chart-container">
-                <canvas id="clicksChart"></canvas>
               </div>
             </div>
           </div>
@@ -574,7 +539,12 @@
       // 应用状态
       const state = {
         links: [],
-        stats: {},
+        stats: {
+          totalLinks: 0,
+          totalVisits: 0,
+          todayVisits: 0,
+          uniqueVisitors: 0,
+        },
         isLoading: false,
         currentEditingLink: null,
       };
@@ -592,7 +562,6 @@
         showLoading(true);
         try {
           await Promise.all([loadStats(), loadLinks(), loadTopLinks()]);
-          initializeChart();
         } catch (error) {
           console.error("初始化失败:", error);
           showMessage("加载数据失败，请刷新页面重试", "error");
@@ -605,14 +574,20 @@
       async function loadStats() {
         try {
           const response = await fetch(`${API_BASE}/api/analytics/overview`);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
           const data = await response.json();
 
           if (data.success) {
             state.stats = data.data;
             updateStatsDisplay();
+          } else {
+            throw new Error(data.error || "获取统计数据失败");
           }
         } catch (error) {
           console.error("加载统计数据失败:", error);
+          showMessage(`加载统计数据失败: ${error.message}`, "error");
         }
       }
 
@@ -620,14 +595,20 @@
       async function loadLinks() {
         try {
           const response = await fetch(`${API_BASE}/api/links?limit=50`);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
           const data = await response.json();
 
           if (data.success) {
-            state.links = data.data.links;
+            state.links = data.data.links || [];
             renderLinksTable();
+          } else {
+            throw new Error(data.error || "获取链接列表失败");
           }
         } catch (error) {
           console.error("加载链接列表失败:", error);
+          showMessage(`加载链接列表失败: ${error.message}`, "error");
         }
       }
 
@@ -637,19 +618,25 @@
           const response = await fetch(
             `${API_BASE}/api/analytics/top-links?limit=10`
           );
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
           const data = await response.json();
 
           if (data.success) {
-            renderTopLinks(data.data);
+            renderTopLinks(data.data || []);
+          } else {
+            throw new Error(data.error || "获取热门链接失败");
           }
         } catch (error) {
           console.error("加载热门链接失败:", error);
+          showMessage(`加载热门链接失败: ${error.message}`, "error");
         }
       }
 
       // 更新统计显示
       function updateStatsDisplay() {
-        const stats = state.stats;
+        const stats = state.stats || {};
         document.getElementById("totalLinks").textContent =
           stats.totalLinks || 0;
         document.getElementById("totalClicks").textContent =
@@ -658,8 +645,8 @@
           stats.todayVisits || 0;
 
         // 计算活跃链接数
-        const activeLinks = state.links.filter(
-          (link) => link.is_active !== false
+        const activeLinks = (state.links || []).filter(
+          (link) => !link.isExpired
         ).length;
         document.getElementById("activeLinks").textContent = activeLinks;
       }
@@ -700,53 +687,49 @@
                             <tr>
                                 <td>
                                     <code style="background: #f1f5f9; padding: 0.25rem 0.5rem; border-radius: 4px;">
-                                        ${link.short_code}
+                                        ${link.shortCode}
                                     </code>
                                 </td>
                                 <td>
                                     <a href="${
-                                      link.original_url
-                                    }" target="_blank" 
+                                      link.originalUrl
+                                    }" target="_blank"
                                        style="color: #0066cc; text-decoration: none;"
-                                       title="${link.original_url}">
-                                        ${truncateUrl(link.original_url, 40)}
+                                       title="${link.originalUrl}">
+                                        ${truncateUrl(link.originalUrl, 40)}
                                     </a>
                                 </td>
-                                <td>${link.access_count || 0}</td>
+                                <td>${link.accessCount || 0}</td>
                                 <td>
                                     <span class="status-badge ${
-                                      link.is_active !== false
+                                      !link.isExpired
                                         ? "status-active"
                                         : "status-inactive"
                                     }">
                                         ${
-                                          link.is_active !== false
+                                          !link.isExpired
                                             ? "✅ 活跃"
-                                            : "❌ 禁用"
+                                            : "❌ 过期"
                                         }
                                     </span>
                                 </td>
-                                <td>${formatDate(link.created_at)}</td>
+                                <td>${formatDate(link.createdAt)}</td>
                                 <td>
                                     <div style="display: flex; gap: 0.5rem;">
                                         <button class="btn btn-secondary" onclick="toggleLinkStatus('${
-                                          link.short_code
-                                        }')" 
+                                          link.shortCode
+                                        }')"
                                                 style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
-                                            ${
-                                              link.is_active !== false
-                                                ? "暂停"
-                                                : "启用"
-                                            }
+                                            ${!link.isExpired ? "停用" : "启用"}
                                         </button>
                                         <button class="btn btn-primary" onclick="editLink('${
-                                          link.short_code
+                                          link.shortCode
                                         }')"
                                                 style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
                                             编辑
                                         </button>
                                         <button class="btn btn-danger" onclick="deleteLink('${
-                                          link.short_code
+                                          link.shortCode
                                         }')"
                                                 style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">
                                             删除
@@ -788,10 +771,10 @@
                         }</div>
                         <div>
                             <div style="font-weight: 500;">${
-                              link.short_code
+                              link.shortCode || link.short_code
                             }</div>
                             <div style="font-size: 0.875rem; color: #6b7280;">${truncateUrl(
-                              link.original_url,
+                              link.originalUrl || link.original_url,
                               50
                             )}</div>
                         </div>
@@ -808,54 +791,9 @@
         container.innerHTML = html;
       }
 
-      // 初始化图表
-      function initializeChart() {
-        const ctx = document.getElementById("clicksChart").getContext("2d");
-
-        // 生成示例数据（在真实应用中应该从API获取）
-        const labels = [];
-        const data = [];
-        for (let i = 6; i >= 0; i--) {
-          const date = new Date();
-          date.setDate(date.getDate() - i);
-          labels.push(date.toLocaleDateString());
-          data.push(Math.floor(Math.random() * 100) + 10);
-        }
-
-        new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: labels,
-            datasets: [
-              {
-                label: "每日点击量",
-                data: data,
-                borderColor: "#0066cc",
-                backgroundColor: "rgba(0, 102, 204, 0.1)",
-                tension: 0.1,
-                fill: true,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                display: false,
-              },
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-              },
-            },
-          },
-        });
-      }
-
       // 工具函数
       function truncateUrl(url, maxLength) {
+        if (!url || typeof url !== "string") return url || "";
         if (url.length <= maxLength) return url;
         return url.substring(0, maxLength - 3) + "...";
       }
@@ -1047,5 +985,7 @@
           }
         });
     </script>
+
+    <!-- 移除外部 Chart.js 依赖以避免 CSP 问题 -->
   </body>
 </html>

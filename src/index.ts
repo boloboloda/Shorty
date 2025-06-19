@@ -191,6 +191,12 @@ app.route("/api/v1", apiV1);
 // 管理仪表板路由
 app.get("/dashboard", async (c) => {
   try {
+    // 设置 CSP 头部以允许内联样式和脚本
+    c.header(
+      "Content-Security-Policy",
+      "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'"
+    );
+
     // 读取仪表板 HTML 文件
     const dashboardHtml = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -198,7 +204,7 @@ app.get("/dashboard", async (c) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shorty - 管理仪表板</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js 移除以避免 CSP 问题 -->
     <style>
         * {
             margin: 0;
@@ -260,18 +266,6 @@ app.get("/dashboard", async (c) => {
             display: grid;
             grid-template-columns: 1fr;
             gap: 2rem;
-        }
-
-        @media (min-width: 768px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr 1fr;
-            }
-        }
-
-        @media (min-width: 1024px) {
-            .dashboard-grid {
-                grid-template-columns: 2fr 1fr;
-            }
         }
 
         /* 卡片样式 */
@@ -538,12 +532,7 @@ app.get("/dashboard", async (c) => {
             100% { transform: rotate(360deg); }
         }
 
-        /* 图表容器 */
-        .chart-container {
-            position: relative;
-            height: 300px;
-            margin: 1rem 0;
-        }
+
 
         /* 空状态 */
         .empty-state {
@@ -629,7 +618,7 @@ app.get("/dashboard", async (c) => {
 
             <!-- 仪表板网格 -->
             <div class="dashboard-grid">
-                <!-- 左侧：链接管理 -->
+                <!-- 链接管理 -->
                 <div class="card">
                     <div class="card-header">
                         <h2 class="card-title">
@@ -647,19 +636,7 @@ app.get("/dashboard", async (c) => {
                     </div>
                 </div>
 
-                <!-- 右侧：分析统计 -->
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">
-                            📊 访问统计
-                        </h2>
-                    </div>
-                    <div class="card-content">
-                        <div class="chart-container">
-                            <canvas id="clicksChart"></canvas>
-                        </div>
-                    </div>
-                </div>
+
             </div>
 
             <!-- 热门链接 -->
@@ -744,7 +721,6 @@ app.get("/dashboard", async (c) => {
                     loadLinks(),
                     loadTopLinks()
                 ]);
-                initializeChart();
             } catch (error) {
                 console.error('初始化失败:', error);
                 showMessage('加载数据失败，请刷新页面重试', 'error');
@@ -834,54 +810,12 @@ app.get("/dashboard", async (c) => {
                 return;
             }
 
-            const html = topLinks.map((link, index) => '<div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem 0; border-bottom: 1px solid #e2e8f0;"><div style="display: flex; align-items: center; gap: 1rem;"><div style="font-weight: bold; color: #0066cc; min-width: 2rem;">#' + (index + 1) + '</div><div><div style="font-weight: 500;">' + link.short_code + '</div><div style="font-size: 0.875rem; color: #6b7280;">' + truncateUrl(link.original_url, 50) + '</div></div></div><div style="text-align: right;"><div style="font-weight: bold;">' + link.visits + '</div><div style="font-size: 0.875rem; color: #6b7280;">点击</div></div></div>').join('');
+            const html = topLinks.map((link, index) => '<div style="display: flex; align-items: center; justify-content: space-between; padding: 1rem 0; border-bottom: 1px solid #e2e8f0;"><div style="display: flex; align-items: center; gap: 1rem;"><div style="font-weight: bold; color: #0066cc; min-width: 2rem;">#' + (index + 1) + '</div><div><div style="font-weight: 500;">' + (link.shortCode || link.short_code) + '</div><div style="font-size: 0.875rem; color: #6b7280;">' + truncateUrl(link.originalUrl || link.original_url, 50) + '</div></div></div><div style="text-align: right;"><div style="font-weight: bold;">' + link.visits + '</div><div style="font-size: 0.875rem; color: #6b7280;">点击</div></div></div>').join('');
 
             container.innerHTML = html;
         }
 
-        // 初始化图表
-        function initializeChart() {
-            const ctx = document.getElementById('clicksChart').getContext('2d');
-            
-            // 生成示例数据（在真实应用中应该从API获取）
-            const labels = [];
-            const data = [];
-            for (let i = 6; i >= 0; i--) {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                labels.push(date.toLocaleDateString());
-                data.push(Math.floor(Math.random() * 100) + 10);
-            }
 
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: '每日点击量',
-                        data: data,
-                        borderColor: '#0066cc',
-                        backgroundColor: 'rgba(0, 102, 204, 0.1)',
-                        tension: 0.1,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    }
-                }
-            });
-        }
 
         // 工具函数
         function truncateUrl(url, maxLength) {

@@ -358,7 +358,7 @@ export class DatabaseService {
     `;
 
     const uniqueVisitorsQuery = `
-      SELECT COUNT(DISTINCT ip_address) as unique FROM access_logs ${whereClause}
+      SELECT COUNT(DISTINCT ip_address) as unique_visitors FROM access_logs ${whereClause}
     `;
 
     const deviceStatsQuery = `
@@ -371,8 +371,7 @@ export class DatabaseService {
     const countryStatsQuery = `
       SELECT country, COUNT(*) as count 
       FROM access_logs 
-      ${whereClause}
-      AND country IS NOT NULL
+      ${whereClause}${whereClause ? " AND" : " WHERE"} country IS NOT NULL
       GROUP BY country 
       ORDER BY count DESC
       LIMIT 10
@@ -387,7 +386,7 @@ export class DatabaseService {
         this.db
           .prepare(uniqueVisitorsQuery)
           .bind(...bindings)
-          .first<{ unique: number }>(),
+          .first<{ unique_visitors: number }>(),
         this.db
           .prepare(deviceStatsQuery)
           .bind(...bindings)
@@ -406,7 +405,7 @@ export class DatabaseService {
 
     return {
       totalVisits: totalVisits?.total || 0,
-      uniqueVisitors: uniqueVisitors?.unique || 0,
+      uniqueVisitors: uniqueVisitors?.unique_visitors || 0,
       deviceStats: deviceStatsMap,
       countryStats: countryStats.results || [],
     };
