@@ -3,24 +3,55 @@
   "name": "shorty",
   "main": "src/index.ts",
   "compatibility_date": "2025-06-19",
-  // "compatibility_flags": [
-  //   "nodejs_compat"
-  // ],
-  // "vars": {
-  //   "MY_VAR": "my-variable"
-  // },
-  // "kv_namespaces": [
-  //   {
-  //     "binding": "MY_KV_NAMESPACE",
-  //     "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  //   }
-  // ],
-  // "r2_buckets": [
-  //   {
-  //     "binding": "MY_BUCKET",
-  //     "bucket_name": "my-bucket"
-  //   }
-  // ],
+  "compatibility_flags": ["nodejs_compat"],
+
+  // 环境配置
+  "env": {
+    "development": {
+      "vars": {
+        "ENVIRONMENT": "development",
+        "BASE_URL": "http://localhost:8787",
+        "CORS_ORIGIN": "*",
+        "DEFAULT_SHORT_LENGTH": "6",
+        "MAX_URL_LENGTH": "2048",
+        "RATE_LIMIT_PER_MINUTE": "60"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "shorty-db",
+          "database_id": "e271c87d-a4c4-411b-9b32-d523844247a2"
+        }
+      ]
+    },
+    "production": {
+      "vars": {
+        "ENVIRONMENT": "production",
+        "BASE_URL": "https://your-domain.workers.dev",
+        "CORS_ORIGIN": "https://your-domain.com",
+        "DEFAULT_SHORT_LENGTH": "8",
+        "MAX_URL_LENGTH": "2048",
+        "RATE_LIMIT_PER_MINUTE": "30"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "shorty-db-prod",
+          "database_id": "your-prod-database-id"
+        }
+      ]
+    }
+  },
+
+  // 默认配置（开发环境）
+  "vars": {
+    "ENVIRONMENT": "development",
+    "BASE_URL": "http://localhost:8787",
+    "CORS_ORIGIN": "*",
+    "DEFAULT_SHORT_LENGTH": "6",
+    "MAX_URL_LENGTH": "2048",
+    "RATE_LIMIT_PER_MINUTE": "60"
+  },
   "d1_databases": [
     {
       "binding": "DB",

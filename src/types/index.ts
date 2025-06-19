@@ -5,8 +5,29 @@
 // 引用生成的 Cloudflare Workers 类型
 /// <reference types="../../worker-configuration" />
 
-// 使用生成的 Cloudflare 环境类型
-export type Env = CloudflareBindings;
+// 扩展环境变量类型
+export interface Env extends CloudflareBindings {
+  // 数据库绑定
+  DB: D1Database;
+
+  // 环境变量
+  ENVIRONMENT: "development" | "production";
+  BASE_URL: string;
+  CORS_ORIGIN: string;
+  DEFAULT_SHORT_LENGTH: string;
+  MAX_URL_LENGTH: string;
+  RATE_LIMIT_PER_MINUTE: string;
+}
+
+// 应用配置类型
+export interface AppConfig {
+  environment: string;
+  baseUrl: string;
+  corsOrigin: string;
+  defaultShortLength: number;
+  maxUrlLength: number;
+  rateLimitPerMinute: number;
+}
 
 // 链接相关类型
 export interface Link {
@@ -79,4 +100,23 @@ export interface LinksListResponse {
     };
   };
   error?: string;
+}
+
+// HTTP 方法类型
+export type HttpMethod =
+  | "GET"
+  | "POST"
+  | "PUT"
+  | "DELETE"
+  | "PATCH"
+  | "OPTIONS";
+
+// CORS 配置类型
+export interface CorsOptions {
+  origin: string | string[];
+  methods: HttpMethod[];
+  allowedHeaders: string[];
+  exposedHeaders?: string[];
+  credentials?: boolean;
+  maxAge?: number;
 }
