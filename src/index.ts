@@ -18,6 +18,7 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 // 导入服务
 import { DatabaseService } from "./services/database.js";
 import { createLinksHandler } from "./handlers/links.js";
+import { handleRedirect } from "./handlers/redirect.js";
 
 // 创建应用实例
 const app = new Hono<{ Bindings: Env }>();
@@ -156,6 +157,36 @@ apiV1.get("/", (c) => {
 
 // 挂载 API 路由
 app.route("/api/v1", apiV1);
+
+// 重定向路由 - 必须在最后添加，确保不会覆盖 API 路由
+app.get("/:shortCode", async (c) => {
+  const shortCode = c.req.param("shortCode");
+
+  // 过滤掉明显的 API 路由和静态资源
+  if (
+    shortCode.startsWith("api") ||
+    shortCode.startsWith("health") ||
+    shortCode.startsWith("static") ||
+    shortCode.includes(".") || // 包含点的可能是文件
+    shortCode.length < 3 // 短码最小长度为3
+  ) {
+    const response: ApiResponse = {
+      success: false,
+      error: "路由不存在",
+      message: "请求的路径不存在",
+    };
+
+    c.status(404);
+    return c.json(response);
+  }
+
+  // 调用重定向处理器
+  return handleRedirect(c, {
+    redirectType: "temporary", // 使用302临时重定向
+    enableAnalytics: true, // 启用访问统计
+    enableCaching: false, // 禁用缓存以确保统计准确性
+  });
+});
 
 // 根路径 - 欢迎页面
 app.get("/", (c) => {

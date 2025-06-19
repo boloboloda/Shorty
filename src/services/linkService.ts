@@ -253,6 +253,44 @@ export class LinkService {
   }
 
   /**
+   * 根据短码获取链接（原始数据，不检查过期状态）
+   * 用于重定向处理器获取过期链接的信息
+   * @param shortCode - 短码
+   * @returns 获取链接响应
+   */
+  async getLinkByShortCodeRaw(shortCode: string): Promise<GetLinkResponse> {
+    try {
+      const linkData = await this.db.getLinkByShortCode(shortCode);
+
+      if (!linkData) {
+        return {
+          success: false,
+          error: "短链接不存在",
+        };
+      }
+
+      return {
+        success: true,
+        link: {
+          id: linkData.id,
+          originalUrl: linkData.original_url,
+          shortCode: linkData.short_code,
+          shortUrl: this.buildShortUrl(linkData.short_code),
+          createdAt: linkData.created_at,
+          expiresAt: linkData.expires_at,
+          accessCount: linkData.access_count,
+        },
+      };
+    } catch (error) {
+      console.error("获取链接原始数据时发生错误:", error);
+      return {
+        success: false,
+        error: "服务器内部错误",
+      };
+    }
+  }
+
+  /**
    * 更新链接信息
    * @param id - 链接ID
    * @param request - 更新请求
