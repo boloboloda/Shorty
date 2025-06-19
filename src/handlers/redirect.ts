@@ -8,6 +8,7 @@ import {
   createLinkService,
   type LinkServiceConfig,
 } from "../services/linkService.js";
+import { AnalyticsService } from "../services/analyticsService.js";
 import type { Env, ApiResponse } from "../types/index.js";
 
 // 重定向配置
@@ -327,6 +328,7 @@ export async function handleRedirect(
     // 2. 创建服务实例
     const db = new DatabaseService(c.env.DB);
     const linkService = createLinkService(db, getLinkServiceConfig(c.env));
+    const analyticsService = new AnalyticsService(db);
 
     // 3. 查找链接 (with analytics tracking if enabled)
     const linkResult = await linkService.getLink(
@@ -372,24 +374,47 @@ export async function handleRedirect(
       `重定向访问: ${shortCode} -> ${originalUrl} (访问次数: ${link.accessCount})`
     );
 
-    // 5. 添加重定向延迟（如果配置了）
+    // 5. 记录详细的访问分析（如果启用）
+    if (finalConfig.enableAnalytics) {
+      try {
+        const startTime = Date.now();
+        await analyticsService.recordVisit(
+          {
+            id: link.id,
+            original_url: originalUrl,
+            short_code: shortCode,
+            created_at: link.createdAt,
+            access_count: link.accessCount,
+            expires_at: link.expiresAt,
+          },
+          c.req.raw
+        );
+        const recordTime = Date.now() - startTime;
+        console.log(`分析记录完成，耗时: ${recordTime}ms`);
+      } catch (analyticsError) {
+        console.warn(`访问分析记录失败: ${analyticsError}`);
+        // 不阻塞重定向，继续处理
+      }
+    }
+
+    // 6. 添加重定向延迟（如果配置了）
     if (finalConfig.redirectDelay && finalConfig.redirectDelay > 0) {
       await new Promise((resolve) =>
         setTimeout(resolve, finalConfig.redirectDelay)
       );
     }
 
-    // 6. 设置缓存头（如果启用）
+    // 7. 设置缓存头（如果启用）
     if (finalConfig.enableCaching) {
       c.header("Cache-Control", "public, max-age=300"); // 5分钟缓存
     } else {
       c.header("Cache-Control", "no-cache, no-store, must-revalidate");
     }
 
-    // 7. 设置安全头
+    // 8. 设置安全头
     c.header("X-Robots-Tag", "noindex, nofollow"); // 防止搜索引擎索引重定向
 
-    // 8. 执行重定向
+    // 9. 执行重定向
     const statusCode = finalConfig.redirectType === "permanent" ? 301 : 302;
     c.status(statusCode);
 

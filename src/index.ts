@@ -20,6 +20,9 @@ import { DatabaseService } from "./services/database.js";
 import { createLinksHandler } from "./handlers/links.js";
 import { handleRedirect } from "./handlers/redirect.js";
 
+// 导入分析处理器
+import * as analyticsHandlers from "./handlers/analytics.js";
+
 // 创建应用实例
 const app = new Hono<{ Bindings: Env }>();
 
@@ -101,6 +104,18 @@ app.get("/api/info", async (c) => {
         create: "POST /api/links",
         redirect: "GET /:shortCode",
         links: "GET /api/links",
+        analytics: {
+          overview: "GET /api/analytics/overview",
+          linkStats: "GET /api/analytics/links/:linkId",
+          linkStatsByCode: "GET /api/analytics/links/code/:shortCode",
+          topLinks: "GET /api/analytics/top-links",
+          trafficTrend: "GET /api/analytics/traffic-trend",
+          accessLogs: "GET /api/analytics/access-logs",
+          export: "GET /api/analytics/export",
+          summary: "GET /api/analytics/summary",
+          rateLimitCheck: "GET /api/analytics/rate-limit-check",
+          cleanup: "POST /api/analytics/cleanup",
+        },
       },
       limits: {
         maxUrlLength: config.maxUrlLength,
@@ -137,6 +152,21 @@ app.get("/api/stats", async (c) => {
 
 // 挂载处理器
 app.route("/api/links", createLinksHandler());
+
+// 分析 API 路由
+app.get("/api/analytics/overview", analyticsHandlers.getOverviewAnalytics);
+app.get("/api/analytics/links/:linkId", analyticsHandlers.getLinkDetailedStats);
+app.get(
+  "/api/analytics/links/code/:shortCode",
+  analyticsHandlers.getLinkDetailedStatsByCode
+);
+app.get("/api/analytics/top-links", analyticsHandlers.getTopLinks);
+app.get("/api/analytics/traffic-trend", analyticsHandlers.getTrafficTrend);
+app.get("/api/analytics/access-logs", analyticsHandlers.queryAccessLogs);
+app.get("/api/analytics/export", analyticsHandlers.exportData);
+app.get("/api/analytics/summary", analyticsHandlers.generateSummary);
+app.get("/api/analytics/rate-limit-check", analyticsHandlers.checkRateLimit);
+app.post("/api/analytics/cleanup", analyticsHandlers.performCleanup);
 
 // 基础路由组 - API v1
 const apiV1 = new Hono<{ Bindings: Env }>();
