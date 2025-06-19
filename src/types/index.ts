@@ -37,6 +37,8 @@ export interface Link {
   created_at: string;
   access_count: number;
   expires_at: string | null;
+  is_active: boolean;
+  last_accessed_at: string | null;
 }
 
 // 创建链接请求
@@ -82,6 +84,7 @@ export interface GetLinkResponse {
 export interface UpdateLinkRequest {
   originalUrl?: string;
   expiresAt?: string | null;
+  isActive?: boolean;
 }
 
 // 更新链接响应

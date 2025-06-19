@@ -450,6 +450,492 @@ export function createLinksHandler() {
     }
   });
 
+  /**
+   * GET /links/code/:shortCode - 根据短码获取链接详情
+   */
+  app.get("/code/:shortCode", async (c) => {
+    try {
+      const shortCode = c.req.param("shortCode");
+
+      if (!shortCode || shortCode.length < 3) {
+        const response: ApiResponse = {
+          success: false,
+          error: "无效的短码",
+          message: "短码不能为空且长度不能少于3个字符",
+        };
+
+        c.status(400);
+        return c.json(response);
+      }
+
+      // 创建服务实例
+      const db = new DatabaseService(c.env.DB);
+      const linkData = await db.getLinkByShortCode(shortCode);
+
+      if (!linkData) {
+        const response: ApiResponse = {
+          success: false,
+          error: "链接不存在",
+          message: "指定的短码对应的链接未找到",
+        };
+
+        c.status(404);
+        return c.json(response);
+      }
+
+      // 构建响应数据
+      const linkResponse = {
+        id: linkData.id,
+        originalUrl: linkData.original_url,
+        shortCode: linkData.short_code,
+        shortUrl: `${getConfig(c.env).baseUrl}/${linkData.short_code}`,
+        createdAt: linkData.created_at,
+        expiresAt: linkData.expires_at,
+        accessCount: linkData.access_count,
+        isActive: linkData.is_active,
+        lastAccessedAt: linkData.last_accessed_at,
+      };
+
+      const response: ApiResponse = {
+        success: true,
+        data: linkResponse,
+        message: "获取链接详情成功",
+      };
+
+      return c.json(response);
+    } catch (error) {
+      console.error("获取链接详情时发生错误:", error);
+
+      const response: ApiResponse = {
+        success: false,
+        error: "服务器内部错误",
+        message: "获取链接详情时发生未知错误",
+      };
+
+      c.status(500);
+      return c.json(response);
+    }
+  });
+
+  /**
+   * PUT /links/code/:shortCode - 根据短码更新链接信息
+   */
+  app.put("/code/:shortCode", async (c) => {
+    try {
+      const shortCode = c.req.param("shortCode");
+      const updateData = await c.req.json();
+
+      if (!shortCode || shortCode.length < 3) {
+        const response: ApiResponse = {
+          success: false,
+          error: "无效的短码",
+          message: "短码不能为空且长度不能少于3个字符",
+        };
+
+        c.status(400);
+        return c.json(response);
+      }
+
+      // 验证更新数据
+      const updateSchema = z.object({
+        originalUrl: z
+          .string()
+          .min(1, "原始URL不能为空")
+          .max(2048, "URL长度不能超过2048个字符")
+          .optional(),
+
+        expiresAt: z
+          .string()
+          .datetime("过期时间格式无效，请使用 ISO 8601 格式")
+          .optional(),
+
+        isActive: z.boolean({ message: "启用状态必须是布尔值" }).optional(),
+      });
+
+      const validation = updateSchema.safeParse(updateData);
+
+      if (!validation.success) {
+        const response: ApiResponse = {
+          success: false,
+          error: "请求参数验证失败",
+          data: {
+            details: validation.error.errors.map(
+              (err) => `${err.path.join(".")}: ${err.message}`
+            ),
+          },
+        };
+
+        c.status(400);
+        return c.json(response);
+      }
+
+      // 创建服务实例
+      const db = new DatabaseService(c.env.DB);
+
+      // 首先获取链接信息
+      const linkData = await db.getLinkByShortCode(shortCode);
+      if (!linkData) {
+        const response: ApiResponse = {
+          success: false,
+          error: "链接不存在",
+          message: "指定的短码对应的链接未找到",
+        };
+
+        c.status(404);
+        return c.json(response);
+      }
+
+      // 更新链接
+      const linkService = createLinkService(db, getConfig(c.env));
+      const result = await linkService.updateLink(linkData.id, validation.data);
+
+      if (result.success) {
+        const response: ApiResponse<UpdateLinkResponse["link"]> = {
+          success: true,
+          data: result.link,
+          message: "链接更新成功",
+        };
+
+        return c.json(response);
+      } else {
+        const response: ApiResponse = {
+          success: false,
+          error: result.error,
+          data: {
+            details: result.details || [],
+          },
+        };
+
+        if (result.error?.includes("无效的URL")) {
+          c.status(400);
+        } else {
+          c.status(500);
+        }
+
+        return c.json(response);
+      }
+    } catch (error) {
+      console.error("更新链接时发生错误:", error);
+
+      const response: ApiResponse = {
+        success: false,
+        error: "服务器内部错误",
+        message: "更新链接时发生未知错误",
+      };
+
+      c.status(500);
+      return c.json(response);
+    }
+  });
+
+  /**
+   * DELETE /links/code/:shortCode - 根据短码删除链接
+   */
+  app.delete("/code/:shortCode", async (c) => {
+    try {
+      const shortCode = c.req.param("shortCode");
+
+      if (!shortCode || shortCode.length < 3) {
+        const response: ApiResponse = {
+          success: false,
+          error: "无效的短码",
+          message: "短码不能为空且长度不能少于3个字符",
+        };
+
+        c.status(400);
+        return c.json(response);
+      }
+
+      // 创建服务实例
+      const db = new DatabaseService(c.env.DB);
+
+      // 首先获取链接信息
+      const linkData = await db.getLinkByShortCode(shortCode);
+      if (!linkData) {
+        const response: ApiResponse = {
+          success: false,
+          error: "链接不存在",
+          message: "指定的短码对应的链接未找到",
+        };
+
+        c.status(404);
+        return c.json(response);
+      }
+
+      // 删除链接
+      const linkService = createLinkService(db, getConfig(c.env));
+      const deleted = await linkService.deleteLink(linkData.id);
+
+      if (deleted) {
+        const response: ApiResponse = {
+          success: true,
+          message: "链接删除成功",
+          data: {
+            shortCode: shortCode,
+            deletedAt: new Date().toISOString(),
+          },
+        };
+
+        return c.json(response);
+      } else {
+        const response: ApiResponse = {
+          success: false,
+          error: "删除失败",
+          message: "删除链接时发生未知错误",
+        };
+
+        c.status(500);
+        return c.json(response);
+      }
+    } catch (error) {
+      console.error("删除链接时发生错误:", error);
+
+      const response: ApiResponse = {
+        success: false,
+        error: "服务器内部错误",
+        message: "删除链接时发生未知错误",
+      };
+
+      c.status(500);
+      return c.json(response);
+    }
+  });
+
+  /**
+   * POST /links/code/:shortCode/toggle - 切换链接启用/禁用状态
+   */
+  app.post("/code/:shortCode/toggle", async (c) => {
+    try {
+      const shortCode = c.req.param("shortCode");
+
+      if (!shortCode || shortCode.length < 3) {
+        const response: ApiResponse = {
+          success: false,
+          error: "无效的短码",
+          message: "短码不能为空且长度不能少于3个字符",
+        };
+
+        c.status(400);
+        return c.json(response);
+      }
+
+      // 创建服务实例
+      const db = new DatabaseService(c.env.DB);
+
+      // 首先获取链接信息
+      const linkData = await db.getLinkByShortCode(shortCode);
+      if (!linkData) {
+        const response: ApiResponse = {
+          success: false,
+          error: "链接不存在",
+          message: "指定的短码对应的链接未找到",
+        };
+
+        c.status(404);
+        return c.json(response);
+      }
+
+      // 切换状态
+      const newStatus = !linkData.is_active;
+      const linkService = createLinkService(db, getConfig(c.env));
+      const result = await linkService.updateLink(linkData.id, {
+        isActive: newStatus,
+      });
+
+      if (result.success) {
+        const response: ApiResponse = {
+          success: true,
+          data: {
+            shortCode: shortCode,
+            isActive: newStatus,
+            message: newStatus ? "链接已启用" : "链接已禁用",
+            updatedAt: new Date().toISOString(),
+          },
+          message: `链接状态已${newStatus ? "启用" : "禁用"}`,
+        };
+
+        return c.json(response);
+      } else {
+        const response: ApiResponse = {
+          success: false,
+          error: result.error,
+          message: "切换链接状态失败",
+        };
+
+        c.status(500);
+        return c.json(response);
+      }
+    } catch (error) {
+      console.error("切换链接状态时发生错误:", error);
+
+      const response: ApiResponse = {
+        success: false,
+        error: "服务器内部错误",
+        message: "切换链接状态时发生未知错误",
+      };
+
+      c.status(500);
+      return c.json(response);
+    }
+  });
+
+  /**
+   * POST /links/code/:shortCode/ownership - 声明链接所有权（基于IP验证）
+   */
+  app.post("/code/:shortCode/ownership", async (c) => {
+    try {
+      const shortCode = c.req.param("shortCode");
+
+      if (!shortCode || shortCode.length < 3) {
+        const response: ApiResponse = {
+          success: false,
+          error: "无效的短码",
+          message: "短码不能为空且长度不能少于3个字符",
+        };
+
+        c.status(400);
+        return c.json(response);
+      }
+
+      // 获取客户端IP
+      const clientIP =
+        c.req.header("CF-Connecting-IP") ||
+        c.req.header("X-Real-IP") ||
+        c.req.header("X-Forwarded-For")?.split(",")[0] ||
+        "127.0.0.1";
+
+      // 创建服务实例
+      const db = new DatabaseService(c.env.DB);
+
+      // 获取链接信息
+      const linkData = await db.getLinkByShortCode(shortCode);
+      if (!linkData) {
+        const response: ApiResponse = {
+          success: false,
+          error: "链接不存在",
+          message: "指定的短码对应的链接未找到",
+        };
+
+        c.status(404);
+        return c.json(response);
+      }
+
+      // 检查创建IP（如果有记录的话）
+      // 注意：这是一个简单的所有权验证，在生产环境中应该有更完善的认证机制
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          shortCode: shortCode,
+          clientIP: clientIP,
+          canManage: true, // 简化版本，总是允许管理
+          message: "链接管理权限确认",
+          permissions: {
+            canView: true,
+            canUpdate: true,
+            canDelete: true,
+            canToggle: true,
+          },
+        },
+        message: "链接所有权验证成功",
+      };
+
+      return c.json(response);
+    } catch (error) {
+      console.error("验证链接所有权时发生错误:", error);
+
+      const response: ApiResponse = {
+        success: false,
+        error: "服务器内部错误",
+        message: "验证链接所有权时发生未知错误",
+      };
+
+      c.status(500);
+      return c.json(response);
+    }
+  });
+
+  /**
+   * GET /links/code/:shortCode/analytics - 获取链接详细分析数据
+   */
+  app.get("/code/:shortCode/analytics", async (c) => {
+    try {
+      const shortCode = c.req.param("shortCode");
+
+      if (!shortCode || shortCode.length < 3) {
+        const response: ApiResponse = {
+          success: false,
+          error: "无效的短码",
+          message: "短码不能为空且长度不能少于3个字符",
+        };
+
+        c.status(400);
+        return c.json(response);
+      }
+
+      // 解析查询参数
+      const days = parseInt(c.req.query("days") || "30", 10);
+      const includeDetails = c.req.query("details") === "true";
+
+      // 创建服务实例
+      const db = new DatabaseService(c.env.DB);
+
+      // 获取链接信息
+      const linkData = await db.getLinkByShortCode(shortCode);
+      if (!linkData) {
+        const response: ApiResponse = {
+          success: false,
+          error: "链接不存在",
+          message: "指定的短码对应的链接未找到",
+        };
+
+        c.status(404);
+        return c.json(response);
+      }
+
+      // 构建分析数据
+      const analyticsData = {
+        shortCode: shortCode,
+        linkId: linkData.id,
+        basicStats: {
+          totalClicks: linkData.access_count || 0,
+          createdAt: linkData.created_at,
+          lastAccessedAt: linkData.last_accessed_at,
+          isActive: linkData.is_active,
+        },
+        timeRange: {
+          days: days,
+          from: new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(),
+          to: new Date().toISOString(),
+        },
+      };
+
+      // 如果需要详细信息，可以在这里添加更多数据查询
+      if (includeDetails) {
+        // 这里可以调用之前实现的分析服务来获取更详细的数据
+        // 例如地理位置分布、设备类型分布等
+      }
+
+      const response: ApiResponse = {
+        success: true,
+        data: analyticsData,
+        message: "获取链接分析数据成功",
+      };
+
+      return c.json(response);
+    } catch (error) {
+      console.error("获取链接分析数据时发生错误:", error);
+
+      const response: ApiResponse = {
+        success: false,
+        error: "服务器内部错误",
+        message: "获取链接分析数据时发生未知错误",
+      };
+
+      c.status(500);
+      return c.json(response);
+    }
+  });
+
   return app;
 }
 

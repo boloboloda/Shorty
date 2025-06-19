@@ -386,6 +386,8 @@ export async function handleRedirect(
             created_at: link.createdAt,
             access_count: link.accessCount,
             expires_at: link.expiresAt,
+            is_active: true, // 能访问到说明链接是活跃的
+            last_accessed_at: new Date().toISOString(), // 当前访问时间
           },
           c.req.raw
         );
