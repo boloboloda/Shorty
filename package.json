@@ -3,12 +3,23 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --minify",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "db:setup": "node scripts/db-setup.js setup",
+    "db:migrate:local": "node scripts/db-setup.js local",
+    "db:migrate:remote": "node scripts/db-setup.js remote",
+    "db:create": "wrangler d1 create shorty-db",
+    "test": "vitest",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
-    "hono": "^4.7.11"
+    "hono": "^4.7.11",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@types/node": "^24.0.3",
+    "@vitest/ui": "^3.2.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4",
     "wrangler": "^4.4.0"
   }
 }
