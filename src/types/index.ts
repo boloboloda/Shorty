@@ -31,32 +31,87 @@ export interface AppConfig {
 
 // 链接相关类型
 export interface Link {
-  id?: number;
+  id: number;
   original_url: string;
   short_code: string;
-  created_at?: string;
-  access_count?: number;
-  expires_at?: string | null;
+  created_at: string;
+  access_count: number;
+  expires_at: string | null;
 }
 
+// 创建链接请求
 export interface CreateLinkRequest {
-  url: string;
-  customCode?: string;
-  expiresAt?: string;
+  originalUrl: string; // 原始URL
+  customSlug?: string; // 自定义短码
+  expiresAt?: string; // 过期时间
+  expireDays?: number; // 过期天数
 }
 
+// 创建链接响应
 export interface CreateLinkResponse {
   success: boolean;
-  data?: {
+  link?: {
     id: number;
-    shortCode: string;
     originalUrl: string;
+    shortCode: string;
     shortUrl: string;
-    expiresAt?: string;
+    createdAt: string;
+    expiresAt: string | null;
+    accessCount: number;
+  };
+  error?: string;
+  details?: string[];
+}
+
+// 获取链接响应
+export interface GetLinkResponse {
+  success: boolean;
+  link?: {
+    id: number;
+    originalUrl: string;
+    shortCode: string;
+    shortUrl: string;
+    createdAt: string;
+    expiresAt: string | null;
+    accessCount: number;
   };
   error?: string;
 }
 
+// 更新链接请求
+export interface UpdateLinkRequest {
+  originalUrl?: string;
+  expiresAt?: string | null;
+}
+
+// 更新链接响应
+export interface UpdateLinkResponse {
+  success: boolean;
+  link?: {
+    id: number;
+    originalUrl: string;
+    shortCode: string;
+    shortUrl: string;
+    createdAt: string;
+    expiresAt: string | null;
+    accessCount: number;
+  };
+  error?: string;
+  details?: string[];
+}
+
+// 链接统计
+export interface LinkStats {
+  id: number;
+  shortCode: string;
+  originalUrl: string;
+  accessCount: number;
+  createdAt: string;
+  expiresAt: string | null;
+  isExpired: boolean;
+}
+
+// 链接统计响应
 export interface LinkStatsResponse {
   success: boolean;
   data?: {

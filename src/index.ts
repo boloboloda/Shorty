@@ -17,6 +17,7 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 // 导入服务
 import { DatabaseService } from "./services/database.js";
+import { createLinksHandler } from "./handlers/links.js";
 
 // 创建应用实例
 const app = new Hono<{ Bindings: Env }>();
@@ -52,7 +53,7 @@ app.get("/health", async (c) => {
   try {
     // 简单的数据库连接测试
     const db = new DatabaseService(c.env.DB);
-    await db.getLinksCount();
+    await db.getStats();
 
     const response: ApiResponse = {
       success: true,
@@ -132,6 +133,9 @@ app.get("/api/stats", async (c) => {
     throw error; // 让错误处理中间件处理
   }
 });
+
+// 挂载处理器
+app.route("/api/links", createLinksHandler());
 
 // 基础路由组 - API v1
 const apiV1 = new Hono<{ Bindings: Env }>();

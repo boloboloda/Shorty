@@ -7,10 +7,13 @@ import { Link } from "../types/index.js";
 export interface CreateLinkData {
   original_url: string;
   short_code: string;
+  created_at: string;
+  access_count: number;
   expires_at?: string | null;
 }
 
 export interface UpdateLinkData {
+  original_url?: string;
   access_count?: number;
   expires_at?: string | null;
 }
@@ -23,14 +26,20 @@ export class DatabaseService {
    */
   async createLink(data: CreateLinkData): Promise<Link> {
     const query = `
-      INSERT INTO links (original_url, short_code, expires_at)
-      VALUES (?, ?, ?)
+      INSERT INTO links (original_url, short_code, created_at, access_count, expires_at)
+      VALUES (?, ?, ?, ?, ?)
       RETURNING *
     `;
 
     const result = await this.db
       .prepare(query)
-      .bind(data.original_url, data.short_code, data.expires_at)
+      .bind(
+        data.original_url,
+        data.short_code,
+        data.created_at,
+        data.access_count,
+        data.expires_at
+      )
       .first<Link>();
 
     if (!result) {
@@ -44,14 +53,8 @@ export class DatabaseService {
    * 根据短代码获取链接
    */
   async getLinkByShortCode(shortCode: string): Promise<Link | null> {
-    const query = `
-      SELECT * FROM links 
-      WHERE short_code = ? 
-      AND (expires_at IS NULL OR expires_at > datetime('now'))
-    `;
-
+    const query = `SELECT * FROM links WHERE short_code = ?`;
     const result = await this.db.prepare(query).bind(shortCode).first<Link>();
-
     return result || null;
   }
 
@@ -60,31 +63,38 @@ export class DatabaseService {
    */
   async getLinkById(id: number): Promise<Link | null> {
     const query = `SELECT * FROM links WHERE id = ?`;
-
     const result = await this.db.prepare(query).bind(id).first<Link>();
+    return result || null;
+  }
 
+  /**
+   * 根据 URL 获取链接
+   */
+  async getLinkByUrl(url: string): Promise<Link | null> {
+    const query = `SELECT * FROM links WHERE original_url = ? ORDER BY created_at DESC LIMIT 1`;
+    const result = await this.db.prepare(query).bind(url).first<Link>();
     return result || null;
   }
 
   /**
    * 更新链接访问次数
    */
-  async incrementAccessCount(shortCode: string): Promise<void> {
-    const query = `
-      UPDATE links 
-      SET access_count = access_count + 1 
-      WHERE short_code = ?
-    `;
-
-    await this.db.prepare(query).bind(shortCode).run();
+  async incrementAccessCount(id: number): Promise<void> {
+    const query = `UPDATE links SET access_count = access_count + 1 WHERE id = ?`;
+    await this.db.prepare(query).bind(id).run();
   }
 
   /**
    * 更新链接信息
    */
-  async updateLink(id: number, data: UpdateLinkData): Promise<Link | null> {
+  async updateLink(id: number, data: Partial<Link>): Promise<Link> {
     const setClauses: string[] = [];
     const values: any[] = [];
+
+    if (data.original_url !== undefined) {
+      setClauses.push("original_url = ?");
+      values.push(data.original_url);
+    }
 
     if (data.access_count !== undefined) {
       setClauses.push("access_count = ?");
@@ -97,7 +107,9 @@ export class DatabaseService {
     }
 
     if (setClauses.length === 0) {
-      return this.getLinkById(id);
+      const existing = await this.getLinkById(id);
+      if (!existing) throw new Error("Link not found");
+      return existing;
     }
 
     const query = `
@@ -114,7 +126,11 @@ export class DatabaseService {
       .bind(...values)
       .first<Link>();
 
-    return result || null;
+    if (!result) {
+      throw new Error("Failed to update link");
+    }
+
+    return result;
   }
 
   /**
@@ -122,36 +138,37 @@ export class DatabaseService {
    */
   async deleteLink(id: number): Promise<boolean> {
     const query = `DELETE FROM links WHERE id = ?`;
-
     const result = await this.db.prepare(query).bind(id).run();
-
     return result.meta.changes > 0;
   }
 
   /**
    * 获取所有链接（分页）
    */
-  async getLinks(limit: number = 50, offset: number = 0): Promise<Link[]> {
-    const query = `
+  async getAllLinks(
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<{
+    links: Link[];
+    total: number;
+  }> {
+    const linksQuery = `
       SELECT * FROM links 
       ORDER BY created_at DESC 
       LIMIT ? OFFSET ?
     `;
 
-    const result = await this.db.prepare(query).bind(limit, offset).all<Link>();
+    const countQuery = `SELECT COUNT(*) as count FROM links`;
 
-    return result.results || [];
-  }
+    const [linksResult, countResult] = await Promise.all([
+      this.db.prepare(linksQuery).bind(limit, offset).all<Link>(),
+      this.db.prepare(countQuery).first<{ count: number }>(),
+    ]);
 
-  /**
-   * 获取链接总数
-   */
-  async getLinksCount(): Promise<number> {
-    const query = `SELECT COUNT(*) as count FROM links`;
-
-    const result = await this.db.prepare(query).first<{ count: number }>();
-
-    return result?.count || 0;
+    return {
+      links: linksResult.results || [],
+      total: countResult?.count || 0,
+    };
   }
 
   /**
@@ -159,24 +176,20 @@ export class DatabaseService {
    */
   async shortCodeExists(shortCode: string): Promise<boolean> {
     const query = `SELECT 1 FROM links WHERE short_code = ? LIMIT 1`;
-
     const result = await this.db.prepare(query).bind(shortCode).first();
-
     return !!result;
   }
 
   /**
    * 清理过期链接
    */
-  async cleanupExpiredLinks(): Promise<number> {
+  async deleteExpiredLinks(): Promise<number> {
     const query = `
       DELETE FROM links 
       WHERE expires_at IS NOT NULL 
       AND expires_at <= datetime('now')
     `;
-
     const result = await this.db.prepare(query).run();
-
     return result.meta.changes;
   }
 
@@ -205,3 +218,9 @@ export class DatabaseService {
     };
   }
 }
+
+// 向后兼容性别名
+export { DatabaseService as Database };
+
+// 默认导出
+export default DatabaseService;
